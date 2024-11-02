@@ -1,7 +1,7 @@
 {
   "name": "prio",
-  "private": true,
-  "version": "0.1.0",
+  "version": "0.0.0",
+  "description": "More to come, hopefully!",
   "type": "module",
   "scripts": {
     "dev": "vite",
