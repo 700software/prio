@@ -1,0 +1,46 @@
+.column {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: var(--panel-bg);
+}
+
+.column.droppable {
+  border-style: dashed;
+}
+
+.column h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.column ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.column li {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.4rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: grab;
+}
+
+.column li:hover {
+  background: var(--hover);
+}
+
+.column li code {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+.empty {
+  color: var(--muted);
+  cursor: default !important;
+}

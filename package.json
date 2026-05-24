@@ -1,26 +1,38 @@
 {
   "name": "prio",
-  "private": true,
-  "version": "0.1.0",
+  "version": "0.0.0",
+  "description": "Stacked PR manager — merge-up approach, apply multiple branches at once to your work tree, remember merge conflict resolutions for later.",
+  "main": "bin/prio.js",
+  "bin": {
+    "prio": "bin/prio.js"
+  },
+  "files": [
+    "bin",
+    "dist-bin"
+  ],
   "type": "module",
   "scripts": {
+    "cli": "cargo run --manifest-path src-tauri/Cargo.toml --",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "build:binary": "npm run tauri build -- --no-bundle && node scripts/copy-cli-binary.js",
+    "prepack": "node scripts/sync-version.js && npm run build:binary",
+    "postpublish": "git add . && node -e \"require('child_process').execSync(`git commit -m v${require('./package.json').version}`, { stdio: 'inherit' })\" && git push"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-shell": "^2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-shell": "^2"
+    "stuple": "^0.4.3"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2",
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
     "@vitejs/plugin-react": "^4.2.1",
     "typescript": "^5.2.2",
-    "vite": "^5.3.1",
-    "@tauri-apps/cli": "^2"
+    "vite": "^5.3.1"
   }
 }
