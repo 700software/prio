@@ -13,11 +13,12 @@
   "type": "module",
   "scripts": {
     "cli": "cargo run --manifest-path src-tauri/Cargo.toml --",
+    "ui": "tauri dev",
+    "test": "node test-e2e/run.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "build:binary": "npm run tauri build -- --no-bundle && node scripts/copy-cli-binary.js",
-    "prepack": "node scripts/sync-version.js && npm run build:binary",
+    "prepack": "node scripts/sync-version.js && tauri build --no-bundle && node scripts/copy-cli-binary.js",
     "postpublish": "git add . && node -e \"require('child_process').execSync(`git commit -m v${require('./package.json').version}`, { stdio: 'inherit' })\" && git push"
   },
   "dependencies": {

@@ -15,12 +15,22 @@ fn install_hint_git() -> String {
     }
 }
 
-fn install_hint_gh() -> String {
+/// Install instructions for the GitHub CLI (shared by setup and other commands).
+pub fn gh_install_hint() -> String {
     match std::env::consts::OS {
         "windows" => "Run: winget install --id GitHub.cli".into(),
         "macos" => "Run: brew install gh".into(),
         _ => "See https://cli.github.com/packages for the official apt one-liner".into(),
     }
+}
+
+/// How to authenticate with the GitHub CLI.
+pub fn gh_auth_hint() -> String {
+    "Run: gh auth login".into()
+}
+
+fn install_hint_gh() -> String {
+    gh_install_hint()
 }
 
 fn command_exists(name: &str) -> bool {
@@ -60,24 +70,43 @@ pub fn ensure_gh() -> Result<(), PrioError> {
     ensure_tool("gh", install_hint_gh())
 }
 
-pub fn ensure_gh_authenticated(cwd: &Path, logger: &mut Logger) -> Result<(), PrioError> {
-    ensure_gh()?;
-    let output = Command::new("gh")
+pub fn is_gh_installed() -> bool {
+    command_exists("gh")
+}
+
+pub fn is_gh_authenticated(cwd: &Path) -> bool {
+    if !is_gh_installed() {
+        return false;
+    }
+    Command::new("gh")
         .args(["auth", "status"])
         .current_dir(cwd)
         .output()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                PrioError::ToolNotInstalled {
-                    tool: "gh".into(),
-                    install_hint: install_hint_gh(),
-                }
-            } else {
-                PrioError::Io(e)
-            }
-        })?;
-    if !output.status.success() {
-        logger.warning("GitHub CLI is not authenticated. Run: gh auth login");
+        .ok()
+        .is_some_and(|o| o.status.success())
+}
+
+/// Logged-in GitHub username (`gh api user`), when `gh` is installed and authenticated.
+pub fn gh_user_login(cwd: &Path, logger: &mut Logger) -> Option<String> {
+    if !is_gh_authenticated(cwd) {
+        return None;
+    }
+    let login = run_gh(&["api", "user", "-q", ".login"], cwd, logger).ok()?;
+    let login = login.trim();
+    if login.is_empty() {
+        None
+    } else {
+        Some(login.to_string())
+    }
+}
+
+pub fn ensure_gh_authenticated(cwd: &Path, logger: &mut Logger) -> Result<(), PrioError> {
+    ensure_gh()?;
+    if !is_gh_authenticated(cwd) {
+        logger.warning(format!(
+            "GitHub CLI is not authenticated. {}",
+            gh_auth_hint()
+        ));
         return Err(PrioError::GhNotAuthenticated);
     }
     Ok(())
@@ -89,33 +118,37 @@ fn run_command(
     cwd: &Path,
     logger: &mut Logger,
     skip_prio_hooks: bool,
+    comment: Option<&str>,
 ) -> Result<String, PrioError> {
     let cwd = util::absolute_path(cwd);
     let cmd_str = format!("{} {}", program, args.join(" "));
     let dir = util::path_arg(&cwd);
-    logger.log(LogEntry::info(format!("{dir} $ {cmd_str}")));
+    logger.log(LogEntry::cli_command(
+        crate::logger::LogLevel::Info,
+        &dir,
+        &cmd_str,
+        comment,
+    ));
     let mut command = Command::new(program);
     command.args(args).current_dir(&cwd);
     if skip_prio_hooks {
         command.env("PRIO_AUTOMATED", "1");
     }
-    let output = command
-        .output()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                let hint = if program == "git" {
-                    install_hint_git()
-                } else {
-                    install_hint_gh()
-                };
-                PrioError::ToolNotInstalled {
-                    tool: program.to_string(),
-                    install_hint: hint,
-                }
+    let output = command.output().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            let hint = if program == "git" {
+                install_hint_git()
             } else {
-                PrioError::Io(e)
+                install_hint_gh()
+            };
+            PrioError::ToolNotInstalled {
+                tool: program.to_string(),
+                install_hint: hint,
             }
-        })?;
+        } else {
+            PrioError::Io(e)
+        }
+    })?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -125,29 +158,40 @@ fn run_command(
     } else {
         Err(PrioError::CommandFailed {
             command: cmd_str,
-            stderr: if stderr.is_empty() {
-                stdout
-            } else {
-                stderr
-            },
+            stderr: if stderr.is_empty() { stdout } else { stderr },
         })
     }
 }
 
 pub fn run_git(args: &[&str], cwd: &Path, logger: &mut Logger) -> Result<String, PrioError> {
     ensure_git()?;
-    run_command("git", args, cwd, logger, false)
+    run_command("git", args, cwd, logger, false, None)
+}
+
+/// Like [`run_git`], but logs an optional trailing comment (shown in gray on the CLI).
+pub fn run_git_with_comment(
+    args: &[&str],
+    cwd: &Path,
+    logger: &mut Logger,
+    comment: &str,
+) -> Result<String, PrioError> {
+    ensure_git()?;
+    run_command("git", args, cwd, logger, false, Some(comment))
 }
 
 /// Git for automated apply/mv in prio-mc — skips post-commit hooks (avoids deadlock with repo lock).
-pub fn run_git_no_hooks(args: &[&str], cwd: &Path, logger: &mut Logger) -> Result<String, PrioError> {
+pub fn run_git_no_hooks(
+    args: &[&str],
+    cwd: &Path,
+    logger: &mut Logger,
+) -> Result<String, PrioError> {
     ensure_git()?;
-    run_command("git", args, cwd, logger, true)
+    run_command("git", args, cwd, logger, true, None)
 }
 
 pub fn run_gh(args: &[&str], cwd: &Path, logger: &mut Logger) -> Result<String, PrioError> {
     ensure_gh()?;
-    run_command("gh", args, cwd, logger, false)
+    run_command("gh", args, cwd, logger, false, None)
 }
 
 /// Returns true when `path` is the root of a Git working tree (`git rev-parse --is-inside-work-tree`).
@@ -187,13 +231,53 @@ pub fn normalize_origin(url: &str) -> String {
 }
 
 pub fn current_branch(repo_path: &Path, logger: &mut Logger) -> Result<String, PrioError> {
-    Ok(run_git(
-        &["rev-parse", "--abbrev-ref", "HEAD"],
-        repo_path,
-        logger,
-    )?
-    .trim()
-    .to_string())
+    Ok(
+        run_git(&["rev-parse", "--abbrev-ref", "HEAD"], repo_path, logger)?
+            .trim()
+            .to_string(),
+    )
+}
+
+fn branch_ref_exists(
+    reference: &str,
+    repo_path: &Path,
+    logger: &mut Logger,
+) -> Result<bool, PrioError> {
+    Ok(run_git(&["rev-parse", "--verify", reference], repo_path, logger).is_ok())
+}
+
+/// Prepare a branch for `prio apply` in the prio-mc clone.
+///
+/// When the branch has no local ref, fetch from origin — either to discover the branch
+/// or to refresh a stale `origin/<branch>` before merge.
+pub fn ensure_branch_for_apply(
+    branch: &str,
+    repo_path: &Path,
+    logger: &mut Logger,
+) -> Result<(), PrioError> {
+    let local_ref = format!("refs/heads/{branch}");
+    if branch_ref_exists(&local_ref, repo_path, logger)? {
+        return Ok(());
+    }
+
+    let remote_ref = format!("refs/remotes/origin/{branch}");
+    let comment = if branch_ref_exists(&remote_ref, repo_path, logger)? {
+        "to ensure the latest commit from origin is applied"
+    } else {
+        "to see if the branch is found at origin"
+    };
+
+    run_git_with_comment(&["fetch"], repo_path, logger, comment)?;
+
+    if branch_ref_exists(&local_ref, repo_path, logger)?
+        || branch_ref_exists(&remote_ref, repo_path, logger)?
+    {
+        return Ok(());
+    }
+
+    Err(PrioError::Message(format!(
+        "Branch '{branch}' not found locally or at origin/{branch}"
+    )))
 }
 
 pub fn resolve_branch_ref(

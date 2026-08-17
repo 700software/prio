@@ -1,165 +1,203 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { invoke } from '@tauri-apps/api/core'
-import type { Stuple } from 'stuple'
-import { CommitList } from '../CommitList/CommitList'
-import { LogViewer } from '../LogViewer/LogViewer'
-import type { BranchInfo, CommitInfo, PrioResult, RepoPanelState, StatusResult } from '../../types'
-import styles from './StatusPanel.module.css'
+import { useCallback, useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import type { Stuple } from "stuple";
+import { CommitList } from "../CommitList/CommitList";
+import { LogViewer } from "../LogViewer/LogViewer";
+import type {
+  BranchInfo,
+  CommitInfo,
+  PrioResult,
+  RepoPanelState,
+  StatusResult,
+} from "../../types";
+import styles from "./StatusPanel.module.css";
 
 interface Props {
-  repoPath: string
-  panel: Stuple<RepoPanelState>
-  onUnsetupComplete: () => void
-}
-
-function GearIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-    </svg>
-  )
+  repoPath: string;
+  panel: Stuple<RepoPanelState>;
+  onUnsetupComplete: () => void;
 }
 
 export function StatusPanel({ repoPath, panel, onUnsetupComplete }: Props) {
-  const { val: p, set: setPanel } = panel
-  const [menuOpen, setMenuOpen] = useState(false)
-  const settingsRef = useRef<HTMLDivElement>(null)
+  const { val: p, set: setPanel } = panel;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!menuOpen) return
+    if (!menuOpen) return;
     const onPointerDown = (e: MouseEvent) => {
-      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
+      if (
+        settingsRef.current &&
+        !settingsRef.current.contains(e.target as Node)
+      ) {
+        setMenuOpen(false);
       }
-    }
-    document.addEventListener('mousedown', onPointerDown)
-    return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [menuOpen])
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [menuOpen]);
 
   const load = useCallback(async () => {
     try {
-      const s = await invoke<StatusResult>('prio_status', { repoPath })
-      setPanel(prev => ({ ...prev, status: s, lastResult: s.prio_result }))
+      const s = await invoke<StatusResult>("prio_status", { repoPath });
+      setPanel((prev) => ({ ...prev, status: s, lastResult: s.prio_result }));
     } catch (e) {
-      setPanel(prev => ({
+      setPanel((prev) => ({
         ...prev,
         lastResult: {
-          status: 'failure',
+          status: "failure",
           message: String(e),
           logs: [],
         },
-      }))
+      }));
     }
-  }, [repoPath, setPanel])
+  }, [repoPath, setPanel]);
 
   useEffect(() => {
-    void load()
-  }, [load])
+    void load();
+  }, [load]);
 
   const run = async (_command: string, fn: () => Promise<PrioResult>) => {
-    setPanel(prev => ({ ...prev, running: true }))
+    setPanel((prev) => ({ ...prev, running: true }));
     try {
-      const res = await fn()
-      setPanel(prev => ({ ...prev, lastResult: res }))
-      await load()
-      return res
+      const res = await fn();
+      setPanel((prev) => ({ ...prev, lastResult: res }));
+      await load();
+      return res;
     } catch (e) {
-      setPanel(prev => ({
+      setPanel((prev) => ({
         ...prev,
         lastResult: {
-          status: 'failure',
+          status: "failure",
           message: String(e),
           logs: [],
         },
-      }))
+      }));
     } finally {
-      setPanel(prev => ({ ...prev, running: false }))
+      setPanel((prev) => ({ ...prev, running: false }));
     }
-  }
+  };
 
-  const apply = () =>
-    run(`prio apply ${p.branchInput}`, () =>
-      invoke('prio_apply', {
-        repoPath,
-        branches: p.branchInput.split(/\s+/).filter(Boolean),
-      }),
-    )
+  const applyBranch = (branch: string) =>
+    run(`prio apply ${branch}`, () =>
+      invoke("prio_apply", { repoPath, branches: [branch] })
+    );
 
-  const unapply = () =>
-    run(`prio unapply ${p.branchInput}`, () =>
-      invoke('prio_unapply', {
-        repoPath,
-        branches: p.branchInput.split(/\s+/).filter(Boolean),
-      }),
-    )
+  const unapplyBranch = (branch: string) =>
+    run(`prio unapply ${branch}`, () =>
+      invoke("prio_unapply", { repoPath, branches: [branch] })
+    );
 
-  const push = () => run(`prio push ${p.pushBranch}`, () => invoke('prio_push', { repoPath, branch: p.pushBranch }))
+  const push = () =>
+    run(`prio push ${p.pushBranch}`, () =>
+      invoke("prio_push", { repoPath, branch: p.pushBranch })
+    );
 
-  const pr = () => run(`prio pr ${p.pushBranch}`, () => invoke('prio_pr', { repoPath, branch: p.pushBranch }))
+  const pr = () =>
+    run(`prio pr ${p.pushBranch}`, () =>
+      invoke("prio_pr", { repoPath, branch: p.pushBranch })
+    );
 
-  const sync = () => run('prio sync', () => invoke('prio_sync', { repoPath }))
+  const sync = () => run("prio sync", () => invoke("prio_sync", { repoPath }));
 
-  const recover = () => run('prio recover', () => invoke('prio_recover', { repoPath }))
+  const recover = () =>
+    run("prio recover", () => invoke("prio_recover", { repoPath }));
 
   const stack = () =>
-    run(`prio stack ${p.stackDeps} ${p.stackBranch}`, () =>
-      invoke('prio_stack', { repoPath, dependencies: p.stackDeps, branch: p.stackBranch }),
-    )
+    run(`prio stack ${p.stackBranch} ${p.stackDeps}`, () =>
+      invoke("prio_stack", {
+        repoPath,
+        branch: p.stackBranch,
+        dependencies: p.stackDeps.split(/\s+/).filter(Boolean),
+      })
+    );
 
   const handleUnsetup = async () => {
-    setMenuOpen(false)
+    setMenuOpen(false);
     const confirmed = window.confirm(
       `Remove prio setup for this repository?\n\n${repoPath}\n\n` +
-        'This archives .git/prio, renames the work branch, backs up the merge-conflicts clone, ' +
-        'and removes the repo from your prio configuration.',
-    )
-    if (!confirmed) return
+        "This archives .git/prio, renames the work branch, backs up the merge-conflicts clone, " +
+        "and removes the repo from your prio configuration."
+    );
+    if (!confirmed) return;
 
-    setPanel(prev => ({ ...prev, running: true }))
+    setPanel((prev) => ({ ...prev, running: true }));
     try {
-      const res = await invoke<PrioResult>('prio_unsetup', { repoPath })
-      setPanel(prev => ({ ...prev, lastResult: res }))
-      if (res.status !== 'failure') {
-        onUnsetupComplete()
+      const res = await invoke<PrioResult>("prio_unsetup", { repoPath });
+      setPanel((prev) => ({ ...prev, lastResult: res }));
+      if (res.status !== "failure") {
+        onUnsetupComplete();
       }
     } catch (e) {
-      setPanel(prev => ({
+      setPanel((prev) => ({
         ...prev,
         lastResult: {
-          status: 'failure',
+          status: "failure",
           message: String(e),
           logs: [],
         },
-      }))
+      }));
     } finally {
-      setPanel(prev => ({ ...prev, running: false }))
+      setPanel((prev) => ({ ...prev, running: false }));
     }
-  }
+  };
 
   const onCommitDrop = (sha: string, destBranch: string) => {
     void run(`prio mv ${sha} ${destBranch}`, () =>
-      invoke('prio_mv', {
+      invoke("prio_mv", {
         repoPath,
         commits: [sha],
         destination: destBranch,
         create: false,
-      }),
-    )
-  }
+      })
+    );
+  };
 
-  const branches: BranchInfo[] = p.status?.data.applied_branches ?? []
-  const unassigned: CommitInfo[] = p.status?.data.unassigned_commits ?? []
+  const onBranchReorder = (fromIndex: number, toIndex: number) => {
+    const applied = branches.filter((b) => b.applied);
+    const lockedPrefix =
+      p.status?.data.merge_conflict?.branches_merged.length ?? 0;
+    if (fromIndex < lockedPrefix || toIndex < lockedPrefix) return;
+    if (fromIndex === toIndex) return;
+    const names = applied.map((b) => b.name);
+    const [moved] = names.splice(fromIndex, 1);
+    names.splice(toIndex, 0, moved);
+    void run(`prio reorder ${names.join(" ")}`, () =>
+      invoke("prio_reorder", { repoPath, branches: names })
+    );
+  };
+
+  const branches: BranchInfo[] = p.status?.data.applied_branches ?? [];
+  const unassigned: CommitInfo[] = p.status?.data.unassigned_commits ?? [];
+  const appliedBranches = branches.filter((b) => b.applied);
+  const unappliedBranches = branches.filter((b) => !b.applied);
+  const lockedPrefix =
+    p.status?.data.merge_conflict?.branches_merged.length ?? 0;
+
+  const branchTitle = (b: BranchInfo) => {
+    const pr = b.pr_number != null ? ` (PR #${b.pr_number})` : "";
+    return `${b.name}${pr}`;
+  };
+
+  const statusNote = (b: BranchInfo) => {
+    switch (b.apply_status) {
+      case "merged":
+        return "merged in prio-mc";
+      case "conflict":
+        return "merge conflict";
+      case "pending":
+        return "pending";
+      default:
+        return null;
+    }
+  };
+
+  const conflict = p.status?.data.merge_conflict;
 
   return (
     <section className={styles.panel}>
       <div className={styles.headerRow}>
-        <h2>
-          Work area status for {repoPath}{' '}
-          <span className={styles.cliHint}>
-            (<code>prio status</code>)
-          </span>
-        </h2>
+        <h2>Work area status for {repoPath}</h2>
         <div className={styles.settingsWrap} ref={settingsRef}>
           <button
             type="button"
@@ -168,9 +206,9 @@ export function StatusPanel({ repoPath, panel, onUnsetupComplete }: Props) {
             aria-expanded={menuOpen}
             aria-haspopup="menu"
             disabled={p.running}
-            onClick={() => setMenuOpen(open => !open)}
+            onClick={() => setMenuOpen((open) => !open)}
           >
-            <GearIcon />
+            <span aria-hidden>⚙️</span>
           </button>
           {menuOpen && (
             <div className={styles.menu} role="menu">
@@ -187,68 +225,96 @@ export function StatusPanel({ repoPath, panel, onUnsetupComplete }: Props) {
         </div>
       </div>
 
-      <div className={styles.columns}>
-        <div className={styles.branchCol}>
-          <h3>Applied branches</h3>
-          <ul>
-            {branches.map(b => (
-              <li key={b.name}>
-                <div>
-                  {b.name}
-                  {b.pr_number != null && <span> (PR #{b.pr_number})</span>}
-                </div>
-                {(b.commits?.length ?? 0) > 0 && (
-                  <ul className={styles.branchCommits}>
-                    {b.commits!.map(c => (
-                      <li key={c.sha}>
-                        <code>{c.sha.slice(0, 7)}</code> {c.message}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
-            {branches.length === 0 && <li className={styles.muted}>(none)</li>}
-          </ul>
+      {conflict && (
+        <div className={styles.conflictBanner} role="alert">
+          <strong>⚠ Merge conflict in prio-mc</strong>
+          {conflict.incoming_branch ? (
+            <span>
+              Merging <b>{conflict.incoming_branch}</b> into (
+              {conflict.base_desc})
+            </span>
+          ) : (
+            <span>A conflict is in progress in prio-mc.</span>
+          )}
+          <br />
+          Resolve conflicts in: <b>{conflict.mc_path}</b>
+          {conflict.merge_branch && (
+            <>
+              {" "}
+              · branch <b>{conflict.merge_branch}</b>
+            </>
+          )}
+          <code>git -C "{conflict.mc_path}" commit --no-edit</code>
+          {conflict.incoming_branch && (
+            <span className={styles.muted}>
+              Or run <code>prio unapply {conflict.incoming_branch}</code> to
+              discard and cancel.
+            </span>
+          )}
         </div>
-        <CommitList title="Unassigned commits" commits={unassigned} onDragStart={() => {}} />
-      </div>
+      )}
 
-      <p className={styles.muted}>
-        Drag a commit onto a branch name below to run <code>prio mv</code>
-      </p>
-      <div className={styles.dropTargets}>
-        {branches.map(b => (
+      <div className={styles.columns}>
+        {appliedBranches.map((b, index) => {
+          const note = statusNote(b);
+          return (
+            <CommitList
+              key={b.name}
+              title={note ? `${branchTitle(b)} · ${note}` : branchTitle(b)}
+              commits={b.commits ?? []}
+              commitsDraggable={!p.running}
+              onCommitDrop={(sha) => onCommitDrop(sha, b.name)}
+              columnDraggable={!p.running && index > lockedPrefix}
+              branchIndex={index}
+              onBranchDrop={onBranchReorder}
+              branchDropDisabled={p.running || index < lockedPrefix}
+              headerExtra={
+                <input
+                  type="checkbox"
+                  className={styles.applyCheck}
+                  checked
+                  disabled={p.running}
+                  aria-label={`Unapply ${b.name}`}
+                  onChange={() => void unapplyBranch(b.name)}
+                />
+              }
+            />
+          );
+        })}
+        {unappliedBranches.map((b) => (
           <CommitList
             key={b.name}
-            title={`Drop → ${b.name}`}
-            commits={[]}
-            droppable
-            onDrop={sha => onCommitDrop(sha, b.name)}
+            title={branchTitle(b)}
+            commits={b.commits ?? []}
+            commitsDraggable={!p.running}
+            onCommitDrop={(sha) => onCommitDrop(sha, b.name)}
+            headerExtra={
+              <input
+                type="checkbox"
+                className={styles.applyCheck}
+                checked={false}
+                disabled={p.running}
+                aria-label={`Apply ${b.name}`}
+                onChange={() => void applyBranch(b.name)}
+              />
+            }
           />
         ))}
-        <CommitList title="Drop → unassigned (.)" commits={[]} droppable onDrop={sha => onCommitDrop(sha, '.')} />
-      </div>
-
-      <div className={styles.actions}>
-        <input
-          placeholder="branch or pr-123"
-          value={p.branchInput}
-          onChange={e => setPanel(prev => ({ ...prev, branchInput: e.target.value }))}
+        <CommitList
+          title="Unassigned commits in work area"
+          commits={unassigned}
+          commitsDraggable={!p.running}
+          onCommitDrop={(sha) => onCommitDrop(sha, ".")}
         />
-        <button type="button" onClick={() => void apply()} disabled={p.running}>
-          Apply
-        </button>
-        <button type="button" onClick={() => void unapply()} disabled={p.running}>
-          Unapply
-        </button>
       </div>
 
       <div className={styles.actions}>
         <input
           placeholder="branch to push/pr"
           value={p.pushBranch}
-          onChange={e => setPanel(prev => ({ ...prev, pushBranch: e.target.value }))}
+          onChange={(e) =>
+            setPanel((prev) => ({ ...prev, pushBranch: e.target.value }))
+          }
         />
         <button type="button" onClick={() => void push()} disabled={p.running}>
           Push
@@ -260,14 +326,18 @@ export function StatusPanel({ repoPath, panel, onUnsetupComplete }: Props) {
 
       <div className={styles.actions}>
         <input
-          placeholder="deps (a+b)"
-          value={p.stackDeps}
-          onChange={e => setPanel(prev => ({ ...prev, stackDeps: e.target.value }))}
-        />
-        <input
           placeholder="stacked branch"
           value={p.stackBranch}
-          onChange={e => setPanel(prev => ({ ...prev, stackBranch: e.target.value }))}
+          onChange={(e) =>
+            setPanel((prev) => ({ ...prev, stackBranch: e.target.value }))
+          }
+        />
+        <input
+          placeholder="deps (space separated)"
+          value={p.stackDeps}
+          onChange={(e) =>
+            setPanel((prev) => ({ ...prev, stackDeps: e.target.value }))
+          }
         />
         <button type="button" onClick={() => void stack()} disabled={p.running}>
           Stack
@@ -278,7 +348,11 @@ export function StatusPanel({ repoPath, panel, onUnsetupComplete }: Props) {
         <button type="button" onClick={() => void sync()} disabled={p.running}>
           Sync
         </button>
-        <button type="button" onClick={() => void recover()} disabled={p.running}>
+        <button
+          type="button"
+          onClick={() => void recover()}
+          disabled={p.running}
+        >
           Recover
         </button>
         <button type="button" onClick={() => void load()} disabled={p.running}>
@@ -288,5 +362,5 @@ export function StatusPanel({ repoPath, panel, onUnsetupComplete }: Props) {
 
       <LogViewer key={repoPath} result={p.lastResult} isRunning={p.running} />
     </section>
-  )
+  );
 }

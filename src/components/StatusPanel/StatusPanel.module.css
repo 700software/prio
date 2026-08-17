@@ -1,7 +1,7 @@
 .panel {
   padding: 1rem 1.5rem 2rem;
   text-align: left;
-  max-width: 960px;
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -58,7 +58,7 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel-bg);
-  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
+  box-shadow: 0 4px 12px var(--menu-shadow);
 }
 
 .menuItem {
@@ -74,63 +74,26 @@
 }
 
 .menuItem:hover {
-  background: rgb(0 0 0 / 6%);
+  background: var(--menu-hover);
 }
 
 .menuItemDanger:hover {
-  color: #b42318;
-}
-
-.cliHint {
-  font-weight: 400;
-  color: var(--muted);
-  font-size: 0.85em;
-}
-
-.cliHint code {
-  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
-  font-size: 1em;
+  color: var(--danger);
 }
 
 .columns {
   display: flex;
   gap: 1rem;
   margin-bottom: 1rem;
+  overflow-x: auto;
+  align-items: flex-start;
+  padding-bottom: 0.25rem;
 }
 
-.branchCol {
-  flex: 1;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.75rem;
-  background: var(--panel-bg);
-}
-
-.branchCol ul {
-  list-style: none;
+.applyCheck {
+  flex-shrink: 0;
   margin: 0;
-  padding: 0;
-  font-size: 0.85rem;
-}
-
-.branchCol li {
-  padding: 0.25rem 0;
-}
-
-.branchCommits {
-  list-style: none;
-  margin: 0.25rem 0 0;
-  padding: 0 0 0 0.5rem;
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.branchCommits li {
-  padding: 0.15rem 0;
-}
-
-.branchCommits code {
-  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  cursor: pointer;
 }
 
 .muted {
@@ -138,11 +101,31 @@
   font-size: 0.8rem;
 }
 
-.dropTargets {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.5rem;
+.conflictBanner {
   margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--conflict-border);
+  background: var(--conflict-bg);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.conflictBanner strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.95rem;
+}
+
+.conflictBanner code {
+  display: block;
+  margin-top: 0.35rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  background: var(--conflict-code-bg);
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  white-space: pre;
 }
 
 .actions {

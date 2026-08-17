@@ -104,13 +104,30 @@ fn branch_fully_merged(
 ) -> Result<bool, PrioError> {
     let default_ref = format!("origin/{default_branch}");
 
-    // Check 1: local branch
-    if runner::run_git(
-        &["merge-base", "--is-ancestor", branch, &default_ref],
+    // Guard: if the branch has no unique commits above the default branch its local ref is
+    // just a baseline marker (common for local-only branches created by `prio mv -c`).
+    // Such branches are NOT merged — they were never pushed.
+    let has_own_commits = runner::run_git(
+        &[
+            "log",
+            "--oneline",
+            &format!("{default_ref}..{branch}"),
+            "--",
+        ],
         repo_path,
         logger,
     )
-    .is_ok()
+    .map(|out| !out.trim().is_empty())
+    .unwrap_or(false);
+
+    // Check 1: local branch — only valid when the branch actually has unique commits
+    if has_own_commits
+        && runner::run_git(
+            &["merge-base", "--is-ancestor", branch, &default_ref],
+            repo_path,
+            logger,
+        )
+        .is_ok()
     {
         return Ok(true);
     }
@@ -132,16 +149,7 @@ fn branch_fully_merged(
     // gh pr list defaults to --state open; we need --state merged explicitly.
     if let Ok(json) = runner::run_gh(
         &[
-            "pr",
-            "list",
-            "--head",
-            branch,
-            "--state",
-            "merged",
-            "--json",
-            "number",
-            "--limit",
-            "1",
+            "pr", "list", "--head", branch, "--state", "merged", "--json", "number", "--limit", "1",
         ],
         repo_path,
         logger,

@@ -12,6 +12,7 @@ use crate::logger::Logger;
 use crate::result::{PrioResult, PrioStatus};
 use crate::services::apply;
 use crate::services::common::{assign_work_commits_to_branch, default_mc_path};
+use crate::services::work_branch_default;
 use crate::storage::{repo_state, user_config};
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -21,51 +22,14 @@ pub struct WorkBranchSuggestion {
 }
 
 pub fn suggest_work_branch(repo_path: &Path) -> Result<WorkBranchSuggestion, PrioError> {
-    let default = get_work_branch_default(repo_path, None)?;
+    let mut logger = Logger::Cli;
+    let default = work_branch_default::resolve(repo_path, None, false, &mut logger)?;
     Ok(WorkBranchSuggestion {
         default_name: default.clone(),
         explanation: "Your work branch is where prio dynamically applies and unapplies stacked changes. \
             Use a unique name (e.g. prio/yourname) so an accidental git push won't overwrite anyone else's prio work."
             .into(),
     })
-}
-
-pub fn get_work_branch_default(
-    repo_path: &Path,
-    override_name: Option<String>,
-) -> Result<String, PrioError> {
-    if let Some(name) = override_name {
-        return Ok(name);
-    }
-    let user_cfg = user_config::load_config()?;
-    if let Some(prefix) = user_cfg.work_branch_prefix {
-        return Ok(prefix);
-    }
-
-    let mut logger = Logger::Cli;
-    let email = runner::run_git(&["config", "user.email"], repo_path, &mut logger)
-        .unwrap_or_default()
-        .trim()
-        .to_string();
-
-    if email.is_empty() {
-        return Ok("prio/user".to_string());
-    }
-
-    let client = reqwest::blocking::Client::builder()
-        .user_agent("prio")
-        .build()?;
-    let url = format!("https://api.github.com/search/users?q={email}");
-    let resp: serde_json::Value = client.get(&url).send()?.json().ok().unwrap_or_default();
-
-    if let Some(items) = resp.get("items").and_then(|i| i.as_array()) {
-        if let Some(first) = items.first() {
-            if let Some(login) = first.get("login").and_then(|l| l.as_str()) {
-                return Ok(format!("prio/{login}"));
-            }
-        }
-    }
-    Ok("prio/user".to_string())
 }
 
 pub fn prompt_work_branch(default: &str) -> Result<String, PrioError> {
@@ -88,9 +52,8 @@ pub fn run(
     interactive: bool,
     logger: &mut Logger,
 ) -> Result<PrioResult, PrioError> {
-    let path = repo_path.unwrap_or_else(|| {
-        std::env::current_dir().expect("current directory should exist")
-    });
+    let path = repo_path
+        .unwrap_or_else(|| std::env::current_dir().expect("current directory should exist"));
     let abs = crate::util::absolute_path(path);
 
     logger.info(format!(
@@ -120,20 +83,27 @@ pub fn run(
         mc_path = Some(PathBuf::from(&record.mc_clone_path));
     }
 
-    let mc_path = crate::util::absolute_path(
-        mc_path.unwrap_or_else(|| default_mc_path(&repo_path)),
-    );
+    let mc_path =
+        crate::util::absolute_path(mc_path.unwrap_or_else(|| default_mc_path(&repo_path)));
 
     if !mc_path.exists() {
         clone_mc_from_work_repo(&repo_path, &mc_path, logger)?;
         repo_state::ensure_prio_dirs(&mc_path)?;
     } else {
-        logger.info(format!("Using existing merge-conflicts clone at {}", mc_path.display()));
+        logger.info(format!(
+            "Using existing merge-conflicts clone at {}",
+            mc_path.display()
+        ));
     }
 
     let default_branch = detect_default_branch(&repo_path, logger)?;
     let user_cfg = user_config::load_config()?;
-    let suggested = get_work_branch_default(&repo_path, work_branch_override.clone())?;
+    let suggested = work_branch_default::resolve(
+        &repo_path,
+        work_branch_override.clone(),
+        interactive,
+        logger,
+    )?;
     let work_branch = if let Some(wb) = work_branch_override {
         wb
     } else if interactive && user_cfg.work_branch_prefix.is_none() {
@@ -167,16 +137,15 @@ pub fn run(
     let baseline = baseline.trim().to_string();
 
     let branch_at_setup = runner::current_branch(&repo_path, logger)?;
-    let initial_applied: Vec<String> = if branch_at_setup != work_branch
-        && branch_at_setup != default_branch
-    {
-        logger.info(format!(
-            "You were on branch {branch_at_setup}; it will be recorded as an applied branch"
-        ));
-        vec![branch_at_setup]
-    } else {
-        vec![]
-    };
+    let initial_applied: Vec<String> =
+        if branch_at_setup != work_branch && branch_at_setup != default_branch {
+            logger.info(format!(
+                "You were on branch {branch_at_setup}; it will be recorded as an applied branch"
+            ));
+            vec![branch_at_setup]
+        } else {
+            vec![]
+        };
 
     let state = repo_state::RepoState {
         work_branch: work_branch.clone(),
@@ -189,6 +158,7 @@ pub fn run(
         merge_in_progress: false,
         pending_merge_branches: vec![],
         pending_merge_index: 0,
+        mv_rebase_conflict: None,
     };
     repo_state::save_state(&repo_path, &state)?;
 
@@ -250,7 +220,10 @@ pub fn run(
     user_config::upsert_repo(record)?;
 
     let logs = logger.drain();
-    let status = if logs.iter().any(|l| l.level == crate::logger::LogLevel::Warning) {
+    let status = if logs
+        .iter()
+        .any(|l| l.level == crate::logger::LogLevel::Warning)
+    {
         PrioStatus::Warning
     } else {
         PrioStatus::Success
@@ -284,8 +257,11 @@ fn clone_mc_from_work_repo(
 }
 
 fn detect_default_branch(repo_path: &Path, logger: &mut Logger) -> Result<String, PrioError> {
-    if let Ok(sym) = runner::run_git(&["symbolic-ref", "refs/remotes/origin/HEAD"], repo_path, logger)
-    {
+    if let Ok(sym) = runner::run_git(
+        &["symbolic-ref", "refs/remotes/origin/HEAD"],
+        repo_path,
+        logger,
+    ) {
         if let Some(branch) = sym.trim().strip_prefix("refs/remotes/origin/") {
             return Ok(branch.to_string());
         }

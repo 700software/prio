@@ -10,7 +10,7 @@ use crate::git::runner;
 use crate::logger::Logger;
 use crate::result::PrioResult;
 use crate::services::apply;
-use crate::services::common::resolve_repo_path;
+use crate::services::common::{mc_path_for_repo, resolve_repo_path};
 use crate::storage::repo_state;
 
 #[derive(Serialize)]
@@ -41,7 +41,7 @@ pub fn run(repo_path: Option<PathBuf>, logger: &mut Logger) -> Result<PrioResult
         ));
     }
 
-    let state = repo_state::load_state(&repo_path)?;
+    let _state = repo_state::load_state(&repo_path)?;
     let new_commits = runner::run_git(
         &[
             "log",
@@ -78,6 +78,19 @@ pub fn run(repo_path: Option<PathBuf>, logger: &mut Logger) -> Result<PrioResult
     )?;
     repo_state::save_state(&repo_path, &last_good.state)?;
 
+    // Clear any mv_rebase_in_progress state in prio-mc so mc-post-commit doesn't
+    // try to resume a rebase that was just abandoned.
+    if let Ok(mc_path) = mc_path_for_repo(&repo_path, None) {
+        if let Ok(mut mc_state) = repo_state::load_mc_state(&mc_path) {
+            if mc_state.mv_rebase_in_progress {
+                mc_state.mv_rebase_in_progress = false;
+                mc_state.mv_rebase_source_branch.clear();
+                mc_state.mv_rebase_remaining_commits.clear();
+                let _ = repo_state::save_mc_state(&mc_path, &mc_state);
+            }
+        }
+    }
+
     apply::run(
         Some(repo_path.clone()),
         last_good.state.applied_branches,
@@ -89,7 +102,10 @@ pub fn run(repo_path: Option<PathBuf>, logger: &mut Logger) -> Result<PrioResult
     if let Some(w) = warning {
         Ok(PrioResult::warning(format!("Recovered. {w}"), logs))
     } else {
-        Ok(PrioResult::success("Recovered to last known good state.", logs))
+        Ok(PrioResult::success(
+            "Recovered to last known good state.",
+            logs,
+        ))
     }
 }
 

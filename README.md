@@ -50,21 +50,23 @@ prio pr feature/my-branch
 
 ## Command reference
 
-| Command                             | Description                                                                                        |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `prio setup [repo] [mc-clone]`      | Register repo (default: current directory), create/use `*-prio-mc` clone, set work branch          |
-| `prio unsetup [-y]`                 | Archive `.git/prio`, rename work branch to `prio/backup/<ts>`, backup mc clone (`-y` skips prompt) |
-| `prio status`                       | Applied branches, assigned commits, and unassigned commits on the work branch                      |
-| `prio apply <branch\|pr-N>...`      | Merge branches into work area (via prio-mc)                                                        |
-| `prio unapply <branch\|pr-N>...`    | Remove branches from work area                                                                     |
-| `prio mv <sha>... <dest> [-c] [-a]` | Assign commits to a branch or `.`; `-c` creates and applies; `-a` applies destination              |
-| `prio push <branch>`                | Push branch to origin                                                                              |
-| `prio pr <branch>`                  | Push and open draft PR (uses `PR.md` if present)                                                   |
-| `prio stack <deps> <branch>`        | Record stack metadata (`deps` can use `+`)                                                         |
-| `prio unstack <branch>`             | Remove stack metadata                                                                              |
-| `prio sync`                         | Purge merged branches from apply list                                                              |
-| `prio syncs`                        | Run `prio sync` for all registered repos                                                           |
-| `prio recover`                      | Reset work branch to last known good state                                                         |
+| Command                                  | Description                                                                                                                                                                                                                                                           |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prio setup [repo] [mc-clone]`           | Register repo (default: current directory), create/use `*-prio-mc` clone, set work branch                                                                                                                                                                             |
+| `prio unsetup [-y]`                      | Archive `.git/prio`, rename work branch to `prio/backup/<ts>`, backup mc clone (`-y` skips prompt)                                                                                                                                                                    |
+| `prio status`                            | Applied branches, assigned commits, and unassigned commits on the work branch                                                                                                                                                                                         |
+| `prio apply <branch\|pr-N>...`           | Merge branches into work area (via prio-mc)                                                                                                                                                                                                                           |
+| `prio unapply <branch\|pr-N>...`         | Remove branches from work area                                                                                                                                                                                                                                        |
+| `prio mv <sha>... <dest> [-c] [-a] [-f]` | Assign commits to a branch or `.`; `-c` creates and applies; `-a` applies destination; for commits on applied branches, removes them from the source branch in prio-mc. `-f` force-pushes the source branch after rebase (required when source is pushed to origin).  |
+| `prio cp <sha>... <dest> [-c] [-a]`      | Copy commits to a branch non-destructively — the source branch is unchanged. `-c` creates and applies destination; `-a` applies it.                                                                                                                                   |
+| `prio push <branch> [-p]`                | Push branch to origin. `-p` / `--push-deps` also pushes any stacked dependency branches that are not yet on origin; without `-p`, the command fails if any dependency is unpushed.                                                                                    |
+| `prio pr <branch>`                       | Push and open draft PR (uses `PR.md` if present)                                                                                                                                                                                                                      |
+| `prio stack <branch> [dep1 dep2 ...]`    | Record that `branch` is stacked after the listed dependencies; re-applies in dependency order                                                                                                                                                                         |
+| `prio unstack <branch> [-k\|-f]`         | Remove stack relationship; rebases branch off dependencies back onto default branch by default. `-k` keeps upstream commits (metadata-only, safe for pushed branches). `-f` rebases and force-pushes (rewrites remote history). Pushed branches require `-k` or `-f`. |
+| `prio sync`                              | Purge merged branches from apply list                                                                                                                                                                                                                                 |
+| `prio syncs`                             | Run `prio sync` for all registered repos                                                                                                                                                                                                                              |
+| `prio abort`                             | Abort an in-progress `prio mv` conflict: cleans up the partial destination branch in prio-mc and WORK, and clears conflict state. Faster and more targeted than `prio recover`.                                                                                       |
+| `prio recover`                           | Reset work branch to last known good state                                                                                                                                                                                                                            |
 
 When you checkout a branch other than your work branch, prio becomes **inactive** — checkout the work branch or run `prio setup`.
 
@@ -84,7 +86,7 @@ npm run build:binary   # build release binary
 
 ## Acknowledgments
 
-Thank you to workplaces everywhere for taking way too long to merge my PRs, 😀 thereby inspiring me to continue working on follow-up branches in parallel before I had any tooling.
+Thank you to workplaces everywhere for taking way too long to merge my PRs, 😀 thereby inspiring me to continue working on follow-up branches in parallel even before I had any tooling.
 
 Thanks to Jessie White for informing me the proper term for this whole thing is "Stacked PRs".
 

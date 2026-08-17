@@ -114,7 +114,7 @@ fn build_stack_lines(
         if entry.branch != branch {
             continue;
         }
-        for dep in entry.dependency.split('+') {
+        for dep in &entry.dependencies {
             let dep = dep.trim();
             if dep.is_empty() {
                 continue;

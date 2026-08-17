@@ -19,8 +19,31 @@ fn default_main() -> String {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct StackEntry {
-    pub dependency: String,
+    /// Branch that is stacked (depends on `dependencies`).
     pub branch: String,
+    /// Branches this branch is stacked after (its dependencies).
+    #[serde(default)]
+    pub dependencies: Vec<String>,
+}
+
+/// Persisted when a `prio mv` hits a cherry-pick conflict in prio-mc.
+/// Cleared by `prio abort`, `prio recover`, or when the operation completes.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MvRebaseConflict {
+    /// Branch being rebased (source of the mv).
+    pub source_branch: String,
+    /// Destination branch.
+    pub dest_branch: String,
+    /// SHA that caused the cherry-pick conflict in prio-mc.
+    pub conflicting_commit: String,
+    /// Whether the source branch was pushed to origin.
+    pub source_is_pushed: bool,
+    /// Absolute path to the prio-mc clone (for display in `prio status`).
+    pub mc_path: String,
+    /// "dest"   = conflict while cherry-picking commits onto the destination branch.
+    /// "source" = conflict while rebasing the source branch to remove the moved commits.
+    #[serde(default)]
+    pub phase: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -43,6 +66,9 @@ pub struct RepoState {
     pub pending_merge_branches: Vec<String>,
     #[serde(default)]
     pub pending_merge_index: usize,
+    /// Set when a `prio mv -f` source-branch rebase hits a cherry-pick conflict in prio-mc.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mv_rebase_conflict: Option<MvRebaseConflict>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +108,59 @@ pub struct McState {
     /// (e.g. `prio-mc/feature-a+feature-b`). Empty when no merge is in progress.
     #[serde(default)]
     pub merge_branch: String,
+    /// Set when a `prio mv` hits a cherry-pick conflict in prio-mc.
+    /// mc-post-commit uses this to resume the operation after the user resolves.
+    #[serde(default)]
+    pub mv_rebase_in_progress: bool,
+    /// "dest" = conflict while cherry-picking onto destination.
+    /// "source" = conflict while rebasing source branch.
+    #[serde(default)]
+    pub mv_rebase_phase: String,
+    #[serde(default)]
+    pub mv_rebase_source_branch: String,
+    #[serde(default)]
+    pub mv_rebase_dest_branch: String,
+    /// For "dest" phase: remaining commits still to cherry-pick onto dest.
+    #[serde(default)]
+    pub mv_rebase_remaining_dest: Vec<String>,
+    /// For "dest" phase: shas to exclude from source branch rebase (after dest is done).
+    #[serde(default)]
+    pub mv_rebase_source_shas_to_exclude: Vec<String>,
+    /// For "source" phase: commits still to cherry-pick during source rebase.
+    #[serde(default)]
+    pub mv_rebase_remaining_commits: Vec<String>,
+    #[serde(default)]
+    pub mv_rebase_source_is_pushed: bool,
+    /// Whether -f was given (determines force-push after source rebase).
+    #[serde(default)]
+    pub mv_rebase_force: bool,
+    /// Source branches to force-push after apply-conflict resolution.
+    /// Format: "branch:is_pushed", same encoding as mv_rebase_unassign_all_sources.
+    #[serde(default)]
+    pub mv_pending_force_push_sources: Vec<String>,
+
+    // ── Cross-branch unassign continuation state ──────────────────────────
+    //
+    // When `prio mv <sha> .` unassigns commits from applied branches, all
+    // conflict-prone work (source rebases, apply merge, unassign cherry-picks)
+    // happens in prio-mc before the work clone is touched.  These fields
+    // carry state across mc-post-commit continuations.
+    /// The original SHAs being unassigned (to cherry-pick on top of apply merge in mc).
+    #[serde(default)]
+    pub mv_rebase_unassign_commits: Vec<String>,
+    /// The apply merge HEAD (before unassign cherry-picks).  Set as
+    /// `state.baseline_commit` after sync so the cherry-picked commits appear
+    /// above the baseline in `prio status`.
+    #[serde(default)]
+    pub mv_rebase_unassign_baseline: String,
+    /// ALL source branches for the cross-branch unassign (format: "branch:is_pushed").
+    /// Used to sync source refs to the work clone once all mc work completes.
+    #[serde(default)]
+    pub mv_rebase_unassign_all_sources: Vec<String>,
+    /// Source branches still to rebase in mc (format: "branch:is_pushed").
+    /// First entry is the one currently conflicting; entries after are queued.
+    #[serde(default)]
+    pub mv_rebase_unassign_source_branches: Vec<String>,
 }
 
 fn config_path(repo_path: &Path) -> PathBuf {

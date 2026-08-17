@@ -1,5 +1,4 @@
 pub mod cli;
-pub mod util;
 pub mod error;
 pub mod git;
 pub mod hooks;
@@ -7,6 +6,7 @@ pub mod logger;
 pub mod result;
 pub mod services;
 pub mod storage;
+pub mod util;
 
 /// Hide the console window when launching the GUI on Windows release builds.
 /// The binary uses the default console subsystem so CLI output works from a
@@ -30,7 +30,7 @@ use std::path::PathBuf;
 
 use logger::Logger;
 use result::PrioResult;
-use services::{apply, mv, pr, push, recover, setup, stack, status, sync, unsetup};
+use services::{abort, apply, cp, mv, pr, push, recover, setup, stack, status, sync, unsetup};
 use storage::user_config;
 
 fn run_service<F>(f: F) -> PrioResult
@@ -87,6 +87,11 @@ fn prio_unapply(repo_path: Option<String>, branches: Vec<String>) -> PrioResult 
 }
 
 #[tauri::command]
+fn prio_reorder(repo_path: Option<String>, branches: Vec<String>) -> PrioResult {
+    run_service(|logger| apply::reorder(repo_path.map(PathBuf::from), branches, logger))
+}
+
+#[tauri::command]
 fn prio_mv(
     repo_path: Option<String>,
     commits: Vec<String>,
@@ -101,6 +106,27 @@ fn prio_mv(
             destination,
             create,
             apply.unwrap_or(false),
+            false, // force: UI never force-pushes; use CLI -f instead
+            logger,
+        )
+    })
+}
+
+#[tauri::command]
+fn prio_cp(
+    repo_path: Option<String>,
+    commits: Vec<String>,
+    destination: String,
+    create: bool,
+    apply: Option<bool>,
+) -> PrioResult {
+    run_service(|logger| {
+        cp::run(
+            repo_path.map(PathBuf::from),
+            commits,
+            destination,
+            create,
+            apply.unwrap_or(false),
             logger,
         )
     })
@@ -108,7 +134,7 @@ fn prio_mv(
 
 #[tauri::command]
 fn prio_push(repo_path: Option<String>, branch: String) -> PrioResult {
-    run_service(|logger| push::run(repo_path.map(PathBuf::from), branch, logger))
+    run_service(|logger| push::run(repo_path.map(PathBuf::from), branch, false, logger))
 }
 
 #[tauri::command]
@@ -117,19 +143,17 @@ fn prio_pr(repo_path: Option<String>, branch: String) -> PrioResult {
 }
 
 #[tauri::command]
-fn prio_stack(
-    repo_path: Option<String>,
-    dependencies: String,
-    branch: String,
-) -> PrioResult {
+fn prio_stack(repo_path: Option<String>, branch: String, dependencies: Vec<String>) -> PrioResult {
     run_service(|logger| {
-        stack::run_stack(repo_path.map(PathBuf::from), dependencies, branch, logger)
+        stack::run_stack(repo_path.map(PathBuf::from), branch, dependencies, logger)
     })
 }
 
 #[tauri::command]
-fn prio_unstack(repo_path: Option<String>, branch: String) -> PrioResult {
-    run_service(|logger| stack::run_unstack(repo_path.map(PathBuf::from), branch, logger))
+fn prio_unstack(repo_path: Option<String>, branch: String, keep: bool) -> PrioResult {
+    run_service(|logger| {
+        stack::run_unstack(repo_path.map(PathBuf::from), branch, keep, false, logger)
+    })
 }
 
 #[tauri::command]
@@ -145,6 +169,11 @@ fn prio_syncs() -> PrioResult {
 #[tauri::command]
 fn prio_recover(repo_path: Option<String>) -> PrioResult {
     run_service(|logger| recover::run(repo_path.map(PathBuf::from), logger))
+}
+
+#[tauri::command]
+fn prio_abort(repo_path: Option<String>) -> PrioResult {
+    run_service(|logger| abort::run(repo_path.map(PathBuf::from), logger))
 }
 
 #[tauri::command]
@@ -177,7 +206,9 @@ pub fn run() {
             prio_status,
             prio_apply,
             prio_unapply,
+            prio_reorder,
             prio_mv,
+            prio_cp,
             prio_push,
             prio_pr,
             prio_stack,
@@ -185,6 +216,7 @@ pub fn run() {
             prio_sync,
             prio_syncs,
             prio_recover,
+            prio_abort,
             prio_unsetup,
             prio_list_repos,
             prio_load_ui_state,

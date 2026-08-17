@@ -45,7 +45,9 @@ pub enum PrioError {
     #[error("Merge conflicts in prio-mc clone at {mc_path}. Resolve conflicts there, commit, then re-run prio apply.")]
     MergeConflict { mc_path: PathBuf },
 
-    #[error("Working tree is not clean. Run `git reset --hard` or `git stash` before prio recover.")]
+    #[error(
+        "Working tree is not clean. Run `git reset --hard` or `git stash` before prio recover."
+    )]
     DirtyWorktree,
 
     #[error("{0}")]

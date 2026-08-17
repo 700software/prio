@@ -14,8 +14,9 @@ pub fn is_cli_invocation() -> bool {
             "setup" | "unsetup" | "status" | "apply" | "unapply" | "mv" | "push" | "pr"
             | "stack" | "unstack" | "sync" | "syncs" | "recover"
             | "suggest-work-branch" | "help"
-            // Internal hook callbacks
-            | "mc-post-commit" | "work-post-commit",
+            // Internal hook callbacks (and legacy hook script names)
+            | "internal-work-post-commit" | "internal-mc-post-commit"
+            | "_internal-work-post-commit" | "_internal-mc-post-commit",
         ) => true,
         // Unknown argument → let Clap handle it (prints an error)
         _ => true,

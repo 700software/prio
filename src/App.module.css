@@ -2,33 +2,8 @@
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
   line-height: 1.5;
-  color: #0f0f0f;
-  background: #e8e8e8;
-  --border: #c8c8c8;
-  --accent: #396cd8;
-  --muted: #666;
-  --panel-bg: #f6f6f6;
-  --chrome-bg: #ddd;
-  --tab-inactive: #ececec;
-  --code-bg: #fff;
-  --input-bg: #fff;
-  --hover: rgba(57, 108, 216, 0.08);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background: #1a1a1a;
-    --border: #444;
-    --accent: #6b9fff;
-    --muted: #aaa;
-    --panel-bg: #2a2a2a;
-    --chrome-bg: #222;
-    --tab-inactive: #333;
-    --code-bg: #1e1e1e;
-    --input-bg: #1e1e1e;
-    --hover: rgba(107, 159, 255, 0.12);
-  }
+  color: var(--text);
+  background: var(--app-bg);
 }
 
 .app {

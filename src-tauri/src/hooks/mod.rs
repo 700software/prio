@@ -18,7 +18,7 @@ const WORK_POST_COMMIT: &str = r#"#!/bin/sh
 # prio work-clone post-commit hook
 if [ -n "$PRIO_AUTOMATED" ]; then exit 0; fi
 if command -v prio >/dev/null 2>&1; then
-  prio _internal-work-post-commit
+  prio internal-work-post-commit
 elif [ -f ".git/prio/hooks/post-commit" ]; then
   :
 fi
@@ -28,7 +28,7 @@ const MC_POST_COMMIT: &str = r#"#!/bin/sh
 # prio mc-clone post-commit hook
 if [ -n "$PRIO_AUTOMATED" ]; then exit 0; fi
 if command -v prio >/dev/null 2>&1; then
-  prio _internal-mc-post-commit
+  prio internal-mc-post-commit
 fi
 "#;
 
@@ -55,8 +55,8 @@ pub fn install(repo_path: &Path, target: HookTarget) -> Result<(), PrioError> {
     let gitignore_path = repo_path.join(".gitignore");
     let husky_gitignored = is_gitignored(&gitignore_path, ".husky");
 
-    let current_hooks = runner::run_git(&["config", "core.hooksPath"], repo_path, &mut logger)
-        .unwrap_or_default();
+    let current_hooks =
+        runner::run_git(&["config", "core.hooksPath"], repo_path, &mut logger).unwrap_or_default();
 
     if husky_gitignored {
         fs::create_dir_all(husky_path.join("_"))?;
@@ -99,6 +99,30 @@ pub fn uninstall(repo_path: &Path, logger: &mut Logger) -> Result<(), PrioError>
         logger.info("Unset core.hooksPath (was managed by prio)");
     }
     Ok(())
+}
+
+/// Returns `true` if the hook script is missing or its content differs from the expected constant.
+fn hook_needs_reinstall(repo_path: &Path, target: &HookTarget) -> bool {
+    let expected = match target {
+        HookTarget::WorkClone => WORK_POST_COMMIT,
+        HookTarget::McClone => MC_POST_COMMIT,
+    };
+    let hook_path = prio_dir(repo_path).join("hooks").join("post-commit");
+    match fs::read_to_string(&hook_path) {
+        Ok(content) => content != expected,
+        Err(_) => true,
+    }
+}
+
+/// Verify hooks are installed correctly and reinstall if not.
+/// Returns `true` if a reinstall was performed.
+pub fn verify_and_reinstall(repo_path: &Path, target: HookTarget) -> bool {
+    if hook_needs_reinstall(repo_path, &target) {
+        let _ = install(repo_path, target);
+        true
+    } else {
+        false
+    }
 }
 
 fn is_gitignored(gitignore_path: &Path, pattern: &str) -> bool {

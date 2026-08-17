@@ -1,6 +1,6 @@
 [package]
 name = "prio"
-version = "0.0.1"
+version = "0.0.0"
 description = "Stacked PR manager — merge-up approach, no rebase."
 authors = ["Bryan Field <bfield@700software.com>"]
 edition = "2021"

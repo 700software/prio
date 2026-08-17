@@ -1,0 +1,3 @@
+- what did `npm run cli setup --work-branch=/g/...` do?
+- Tidy away the _internal-work-post-commit alias
+- guarantee hooks don't get lost on prio-mc by double-checking them
